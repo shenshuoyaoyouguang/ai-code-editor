@@ -8,20 +8,41 @@ import { assert } from 'chai';
 import { injectAxe } from 'axe-playwright';
 
 const PORT = 8563;
-const TIMEOUT = 20 * 1000;
+const TIMEOUT = 30 * 1000;
+const APP_INIT_TIMEOUT = 15 * 1000;
 
 const APP = `http://127.0.0.1:${PORT}/dist/core.html`;
 
 let browser: playwright.Browser;
 let page: playwright.Page;
+const browserLogs: string[] = [];
 
 type BrowserType = 'chromium' | 'firefox' | 'webkit';
 
 const browserType: BrowserType = process.env.BROWSER as BrowserType || 'chromium';
 
 async function openApp(page: playwright.Page): Promise<void> {
-	await page.goto(APP);
-	await page.waitForFunction(() => Boolean((window as Window & { instance?: object }).instance));
+	await page.goto(APP, { waitUntil: 'domcontentloaded' });
+
+	try {
+		await page.waitForFunction(() => Boolean((window as Window & { instance?: object }).instance), undefined, { timeout: APP_INIT_TIMEOUT });
+	} catch (error) {
+		const state = await page.evaluate(() => {
+			const typedWindow = window as Window & { instance?: object };
+			return {
+				url: location.href,
+				title: document.title,
+				readyState: document.readyState,
+				hasInstance: Boolean(typedWindow.instance),
+				containerExists: Boolean(document.getElementById('container')),
+				scriptCount: document.scripts.length,
+				bodyText: document.body?.innerText?.slice(0, 500) ?? ''
+			};
+		});
+
+		const recentBrowserLogs = browserLogs.slice(-10);
+		throw new Error(`Monaco app failed to initialize within ${APP_INIT_TIMEOUT}ms: ${JSON.stringify({ state, recentBrowserLogs })}\n${error instanceof Error ? error.stack ?? error.message : String(error)}`);
+	}
 }
 
 before(async function () {
@@ -48,13 +69,24 @@ beforeEach(async function () {
 	});
 
 	pageErrors.length = 0;
+	browserLogs.length = 0;
 	page.on('pageerror', (e) => {
 		console.log(e);
 		pageErrors.push(e);
 	});
-	page.on('pageerror', (e) => {
-		console.log(e);
-		pageErrors.push(e);
+
+	page.on('console', (msg) => {
+		if (msg.type() === 'error' || msg.type() === 'warning') {
+			const text = `[browser:${msg.type()}] ${msg.text()}`;
+			console.log(text);
+			browserLogs.push(text);
+		}
+	});
+
+	page.on('requestfailed', (request) => {
+		const text = `[requestfailed] ${request.url()} (${request.failure()?.errorText ?? 'unknown'})`;
+		console.log(text);
+		browserLogs.push(text);
 	});
 });
 

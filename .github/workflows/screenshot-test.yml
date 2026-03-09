@@ -39,9 +39,8 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Patch component explorer page load strategy
-        run: |
-          node -e "const fs = require('node:fs'); const file = 'node_modules/@vscode/component-explorer-cli/dist/browserPage.js'; const source = fs.readFileSync(file, 'utf8'); const search = \"waitUntil: 'networkidle'\"; if (!source.includes(search)) { throw new Error('Expected component explorer waitUntil setting was not found'); } fs.writeFileSync(file, source.replace(search, \"waitUntil: 'domcontentloaded'\"));"
+      - name: Patch component explorer CI behavior
+        run: node scripts/patch-component-explorer-ci.js
 
       - name: Install build dependencies
         run: npm ci
@@ -61,7 +60,7 @@ jobs:
       - name: Capture screenshots
         env:
           VSCODE_COMPONENT_EXPLORER_SCREENSHOT: '1'
-        run: timeout 15m npx component-explorer screenshot --project ./test/componentFixtures/component-explorer.json
+        run: timeout 15m npx component-explorer screenshot -vv --project ./test/componentFixtures/component-explorer.json
 
       - name: Compare screenshots
         id: compare
