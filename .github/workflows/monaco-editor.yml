@@ -62,7 +62,7 @@ jobs:
           npm ci
 
       - name: Download Playwright
-        run: npm run playwright-install
+        run: npm exec playwright install --with-deps chromium firefox
 
       - name: Run Monaco Editor Checks
         run: npm run monaco-compile-check
