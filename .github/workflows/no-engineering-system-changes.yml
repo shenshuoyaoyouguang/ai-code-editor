@@ -29,20 +29,22 @@ jobs:
           exit 1
       - uses: octokit/request-action@dad4362715b7fb2ddedf9772c8670824af564f0d # v2.4.0
         id: get_permissions
-        if: ${{ steps.engineering_systems_check.outputs.engineering_systems_modified == 'true' && github.event.pull_request.user.login != 'Copilot' }}
+        if: ${{ steps.engineering_systems_check.outputs.engineering_systems_modified == 'true' && github.event.pull_request.user.login != 'Copilot' && github.event.pull_request.user.login != 'dependabot[bot]' }}
         with:
-          route: GET /repos/microsoft/vscode/collaborators/${{ github.event.pull_request.user.login }}/permission
+          route: GET /repos/{owner}/{repo}/collaborators/{username}/permission
+          owner: ${{ github.repository_owner }}
+          repo: ${{ github.event.repository.name }}
+          username: ${{ github.event.pull_request.user.login }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Set control output variable
         id: control
-        if: ${{ steps.engineering_systems_check.outputs.engineering_systems_modified == 'true' && github.event.pull_request.user.login != 'Copilot' }}
+        if: ${{ steps.engineering_systems_check.outputs.engineering_systems_modified == 'true' && github.event.pull_request.user.login != 'Copilot' && github.event.pull_request.user.login != 'dependabot[bot]' }}
         run: |
           echo "user: ${{ github.event.pull_request.user.login }}"
           echo "role: ${{ fromJson(steps.get_permissions.outputs.data).permission }}"
-          echo "is dependabot: ${{ github.event.pull_request.user.login == 'dependabot[bot]' }}"
           echo "should_run: ${{ !contains(fromJson('["admin", "maintain", "write"]'), fromJson(steps.get_permissions.outputs.data).permission) }}"
-          echo "should_run=${{ !contains(fromJson('["admin", "maintain", "write"]'), fromJson(steps.get_permissions.outputs.data).permission) && github.event.pull_request.user.login != 'dependabot[bot]' }}" >> $GITHUB_OUTPUT
+          echo "should_run=${{ !contains(fromJson('["admin", "maintain", "write"]'), fromJson(steps.get_permissions.outputs.data).permission) }}" >> $GITHUB_OUTPUT
       - name: Check for engineering system changes
         if: ${{ steps.engineering_systems_check.outputs.engineering_systems_modified == 'true' && steps.control.outputs.should_run == 'true' }}
         run: |
