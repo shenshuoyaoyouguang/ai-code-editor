@@ -19,6 +19,11 @@ type BrowserType = 'chromium' | 'firefox' | 'webkit';
 
 const browserType: BrowserType = process.env.BROWSER as BrowserType || 'chromium';
 
+async function openApp(page: playwright.Page): Promise<void> {
+	await page.goto(APP);
+	await page.waitForFunction(() => Boolean((window as Window & { instance?: object }).instance));
+}
+
 before(async function () {
 	this.timeout(TIMEOUT);
 	console.log(`Starting browser: ${browserType}`);
@@ -64,7 +69,7 @@ describe('API Integration Tests', function (): void {
 	this.timeout(TIMEOUT);
 
 	beforeEach(async () => {
-		await page.goto(APP);
+		await openApp(page);
 	});
 
 	it('`monaco` is not exposed as global', async function (): Promise<any> {
@@ -138,7 +143,7 @@ describe('API Integration Tests', function (): void {
 	});
 	describe('Accessibility', function (): void {
 		beforeEach(async () => {
-			await page.goto(APP);
+			await openApp(page);
 			await injectAxe(page);
 			await page.evaluate(`
 			(function () {

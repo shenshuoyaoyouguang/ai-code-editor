@@ -20,6 +20,7 @@ jobs:
   screenshots:
     name: Checking Component Screenshots
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -38,6 +39,10 @@ jobs:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Patch component explorer page load strategy
+        run: |
+          node -e "const fs = require('node:fs'); const file = 'node_modules/@vscode/component-explorer-cli/dist/browserPage.js'; const source = fs.readFileSync(file, 'utf8'); const search = \"waitUntil: 'networkidle'\"; if (!source.includes(search)) { throw new Error('Expected component explorer waitUntil setting was not found'); } fs.writeFileSync(file, source.replace(search, \"waitUntil: 'domcontentloaded'\"));"
+
       - name: Install build dependencies
         run: npm ci
         working-directory: build
@@ -54,7 +59,9 @@ jobs:
         run: npx playwright install chromium
 
       - name: Capture screenshots
-        run: npx component-explorer screenshot --project ./test/componentFixtures/component-explorer.json
+        env:
+          VSCODE_COMPONENT_EXPLORER_SCREENSHOT: '1'
+        run: timeout 15m npx component-explorer screenshot --project ./test/componentFixtures/component-explorer.json
 
       - name: Compare screenshots
         id: compare

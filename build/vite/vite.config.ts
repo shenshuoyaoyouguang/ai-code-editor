@@ -160,6 +160,8 @@ logger.warn = (msg, options) => {
 	loggerWarn(msg, options);
 };
 
+const isComponentExplorerScreenshot = process.env.VSCODE_COMPONENT_EXPLORER_SCREENSHOT === '1';
+
 export default defineConfig({
 	base: './',
 	plugins: [
@@ -198,6 +200,7 @@ export default defineConfig({
 	server: {
 		cors: true,
 		port: 5199,
+		hmr: isComponentExplorerScreenshot ? false : undefined,
 		fs: {
 			allow: [
 				// To allow loading from sources, not needed when loading monaco-editor from npm package
