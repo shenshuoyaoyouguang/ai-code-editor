@@ -10,6 +10,7 @@ const path = require('path');
 
 const PORT = 8563;
 const ROOT_DIR = __dirname;
+const CORE_HTML_PATH = path.join(ROOT_DIR, 'dist', 'core.html');
 const MIME_TYPES = {
 	'.css': 'text/css; charset=utf-8',
 	'.html': 'text/html; charset=utf-8',
@@ -20,6 +21,22 @@ const MIME_TYPES = {
 	'.woff': 'font/woff',
 	'.woff2': 'font/woff2',
 };
+const CORE_HTML = `<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+</head>
+<body>
+	<div id="container" style="width:800px;height:600px;border:1px solid #ccc"></div>
+	<script src="./core.bundle.js"></script>
+</body>
+</html>
+`;
+
+function ensureCoreHtml() {
+	fs.mkdirSync(path.dirname(CORE_HTML_PATH), { recursive: true });
+	fs.writeFileSync(CORE_HTML_PATH, CORE_HTML);
+}
 
 const server = http.createServer((request, response) => {
 	const requestUrl = new URL(request.url || '/', `http://${request.headers.host || '127.0.0.1'}`);
@@ -48,6 +65,7 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
+	ensureCoreHtml();
 	runTests().then(() => {
 		console.log(`All good`);
 		process.exit(0);

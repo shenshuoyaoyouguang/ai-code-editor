@@ -18,6 +18,18 @@ function replaceOrThrow(source, search, replacement, description) {
 	return { source: source.replace(search, replacement), changed: true, alreadyPatched: false };
 }
 
+function replaceRegexOrThrow(source, regex, replacement, description) {
+	if (source.includes(replacement)) {
+		return { source, changed: false, alreadyPatched: true };
+	}
+
+	if (!regex.test(source)) {
+		throw new Error(`Expected to find ${description} while patching component explorer CI support.`);
+	}
+
+	return { source: source.replace(regex, replacement), changed: true, alreadyPatched: false };
+}
+
 function patchFile(filePath, patches) {
 	let source = fs.readFileSync(filePath, 'utf8');
 	let changed = false;
@@ -116,53 +128,32 @@ for (const viewerPath of viewerCandidates) {
 	}
 
 	const source = fs.readFileSync(viewerPath, 'utf8');
-	const variants = [
-		{
-			search: `    for (const [t, n] of Object.entries(this._fixtureModules)) {
-      const s = n.default;
-      s && typeof s == "object" && this._registry.register(t, s);
-    }`,
-			replacement: `    for (const [t, n] of Object.entries(this._fixtureModules)) {
+	const registryGuardReplacement = `for (const [t, n] of Object.entries(this._fixtureModules)) {
       if (!n) {
         console.error("[component-explorer] Fixture module was undefined:", t);
         continue;
       }
       const s = n.default;
-      s && typeof s == "object" && this._registry.register(t, s);
-    }`
-		},
-		{
-			search: `    for (const [t, n] of Object.entries(this._fixtureModules)) {
-      const s = n.default;
-      s && typeof s == "object" && e.set(t, s);
-    }`,
-			replacement: `    for (const [t, n] of Object.entries(this._fixtureModules)) {
-      if (!n) {
-        console.error("[component-explorer] Fixture module was undefined:", t);
-        continue;
-      }
-      const s = n.default;
-      s && typeof s == "object" && e.set(t, s);
-    }`
-		},
-	];
+      s && typeof s == "object" && __REGISTRY_TARGET__;
+    }`;
+	const regex = /for\s*\(const\s*\[t,\s*n\]\s*of\s*Object\.entries\(this\._fixtureModules\)\)\s*\{\s*const\s+s\s*=\s*n\.default;\s*s\s*&&\s*typeof\s+s\s*==\s*"object"\s*&&\s*([^;]+);\s*\}/m;
+	const match = source.match(regex);
 
-	let patched = false;
-	for (const variant of variants) {
-		if (source.includes(variant.replacement)) {
+	if (!match) {
+		if (source.includes('Fixture module was undefined:')) {
 			console.log(`Already patched ${path.relative(process.cwd(), viewerPath)}`);
-			patched = true;
-			break;
+			continue;
 		}
-		if (source.includes(variant.search)) {
-			fs.writeFileSync(viewerPath, source.replace(variant.search, variant.replacement));
-			console.log(`Patched ${path.relative(process.cwd(), viewerPath)}`);
-			patched = true;
-			break;
-		}
+		throw new Error(`Expected to find fixture registry population guard while patching ${path.relative(process.cwd(), viewerPath)}.`);
 	}
 
-	if (!patched) {
-		throw new Error(`Expected to find fixture registry population guard while patching ${path.relative(process.cwd(), viewerPath)}.`);
+	const registryTarget = match[1].trim();
+	const replacement = registryGuardReplacement.replace('__REGISTRY_TARGET__', registryTarget);
+	const result = replaceRegexOrThrow(source, regex, replacement, 'fixture registry population guard');
+	if (result.changed) {
+		fs.writeFileSync(viewerPath, result.source);
+		console.log(`Patched ${path.relative(process.cwd(), viewerPath)}`);
+	} else {
+		console.log(`Already patched ${path.relative(process.cwd(), viewerPath)}`);
 	}
 }
