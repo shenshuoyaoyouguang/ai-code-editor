@@ -7,22 +7,35 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 function replaceOrThrow(source, search, replacement, description) {
+	if (source.includes(replacement)) {
+		return { source, changed: false, alreadyPatched: true };
+	}
+
 	if (!source.includes(search)) {
 		throw new Error(`Expected to find ${description} while patching component explorer CI support.`);
 	}
 
-	return source.replace(search, replacement);
+	return { source: source.replace(search, replacement), changed: true, alreadyPatched: false };
 }
 
 function patchFile(filePath, patches) {
 	let source = fs.readFileSync(filePath, 'utf8');
+	let changed = false;
+	let alreadyPatched = true;
 
 	for (const patch of patches) {
-		source = replaceOrThrow(source, patch.search, patch.replacement, patch.description);
+		const result = replaceOrThrow(source, patch.search, patch.replacement, patch.description);
+		source = result.source;
+		changed = changed || result.changed;
+		alreadyPatched = alreadyPatched && result.alreadyPatched;
 	}
 
-	fs.writeFileSync(filePath, source);
-	console.log(`Patched ${path.relative(process.cwd(), filePath)}`);
+	if (changed) {
+		fs.writeFileSync(filePath, source);
+		console.log(`Patched ${path.relative(process.cwd(), filePath)}`);
+	} else if (alreadyPatched) {
+		console.log(`Already patched ${path.relative(process.cwd(), filePath)}`);
+	}
 }
 
 const browserPagePath = path.join(process.cwd(), 'node_modules', '@vscode', 'component-explorer-cli', 'dist', 'browserPage.js');
@@ -92,3 +105,64 @@ patchFile(componentExplorerPath, [{
 \t\t\`);`
 }]);
 
+const viewerCandidates = [
+	path.join(process.cwd(), 'build', 'vite', 'node_modules', '@vscode', 'component-explorer', 'dist', 'viewer.js'),
+	path.join(process.cwd(), 'node_modules', '@vscode', 'component-explorer', 'dist', 'viewer.js'),
+];
+
+for (const viewerPath of viewerCandidates) {
+	if (!fs.existsSync(viewerPath)) {
+		continue;
+	}
+
+	const source = fs.readFileSync(viewerPath, 'utf8');
+	const variants = [
+		{
+			search: `    for (const [t, n] of Object.entries(this._fixtureModules)) {
+      const s = n.default;
+      s && typeof s == "object" && this._registry.register(t, s);
+    }`,
+			replacement: `    for (const [t, n] of Object.entries(this._fixtureModules)) {
+      if (!n) {
+        console.error("[component-explorer] Fixture module was undefined:", t);
+        continue;
+      }
+      const s = n.default;
+      s && typeof s == "object" && this._registry.register(t, s);
+    }`
+		},
+		{
+			search: `    for (const [t, n] of Object.entries(this._fixtureModules)) {
+      const s = n.default;
+      s && typeof s == "object" && e.set(t, s);
+    }`,
+			replacement: `    for (const [t, n] of Object.entries(this._fixtureModules)) {
+      if (!n) {
+        console.error("[component-explorer] Fixture module was undefined:", t);
+        continue;
+      }
+      const s = n.default;
+      s && typeof s == "object" && e.set(t, s);
+    }`
+		},
+	];
+
+	let patched = false;
+	for (const variant of variants) {
+		if (source.includes(variant.replacement)) {
+			console.log(`Already patched ${path.relative(process.cwd(), viewerPath)}`);
+			patched = true;
+			break;
+		}
+		if (source.includes(variant.search)) {
+			fs.writeFileSync(viewerPath, source.replace(variant.search, variant.replacement));
+			console.log(`Patched ${path.relative(process.cwd(), viewerPath)}`);
+			patched = true;
+			break;
+		}
+	}
+
+	if (!patched) {
+		throw new Error(`Expected to find fixture registry population guard while patching ${path.relative(process.cwd(), viewerPath)}.`);
+	}
+}
