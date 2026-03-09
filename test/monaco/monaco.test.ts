@@ -74,43 +74,43 @@ describe('API Integration Tests', function (): void {
 	it('Focus and Type', async function (): Promise<any> {
 		await page.evaluate(`
 		(function () {
-			instance.focus();
-			instance.trigger('keyboard', 'cursorHome');
-			instance.trigger('keyboard', 'type', {
+			window.instance.focus();
+			window.instance.trigger('keyboard', 'cursorHome');
+			window.instance.trigger('keyboard', 'type', {
 				text: 'a'
 			});
 		})()
 		`);
-		assert.strictEqual(await page.evaluate(`instance.getModel().getLineContent(1)`), 'afrom banana import *');
+		assert.strictEqual(await page.evaluate(`window.instance.getModel().getLineContent(1)`), 'afrom banana import *');
 	});
 
 	it('Type and Undo', async function (): Promise<any> {
 		await page.evaluate(`
 		(function () {
-			instance.focus();
-			instance.trigger('keyboard', 'cursorHome');
-			instance.trigger('keyboard', 'type', {
+			window.instance.focus();
+			window.instance.trigger('keyboard', 'cursorHome');
+			window.instance.trigger('keyboard', 'type', {
 				text: 'a'
 			});
-			instance.getModel().undo();
+			window.instance.getModel().undo();
 		})()
 		`);
-		assert.strictEqual(await page.evaluate(`instance.getModel().getLineContent(1)`), 'from banana import *');
+		assert.strictEqual(await page.evaluate(`window.instance.getModel().getLineContent(1)`), 'from banana import *');
 	});
 
 	it('Multi Cursor', async function (): Promise<any> {
 		await page.evaluate(`
 		(function () {
-			instance.focus();
-			instance.trigger('keyboard', 'editor.action.insertCursorBelow');
-			instance.trigger('keyboard', 'editor.action.insertCursorBelow');
-			instance.trigger('keyboard', 'editor.action.insertCursorBelow');
-			instance.trigger('keyboard', 'editor.action.insertCursorBelow');
-			instance.trigger('keyboard', 'editor.action.insertCursorBelow');
-			instance.trigger('keyboard', 'type', {
+			window.instance.focus();
+			window.instance.trigger('keyboard', 'editor.action.insertCursorBelow');
+			window.instance.trigger('keyboard', 'editor.action.insertCursorBelow');
+			window.instance.trigger('keyboard', 'editor.action.insertCursorBelow');
+			window.instance.trigger('keyboard', 'editor.action.insertCursorBelow');
+			window.instance.trigger('keyboard', 'editor.action.insertCursorBelow');
+			window.instance.trigger('keyboard', 'type', {
 				text: '# '
 			});
-			instance.focus();
+			window.instance.focus();
 		})()
 		`);
 
@@ -118,13 +118,13 @@ describe('API Integration Tests', function (): void {
 
 		assert.deepStrictEqual(await page.evaluate(`
 			[
-				instance.getModel().getLineContent(1),
-				instance.getModel().getLineContent(2),
-				instance.getModel().getLineContent(3),
-				instance.getModel().getLineContent(4),
-				instance.getModel().getLineContent(5),
-				instance.getModel().getLineContent(6),
-				instance.getModel().getLineContent(7),
+				window.instance.getModel().getLineContent(1),
+				window.instance.getModel().getLineContent(2),
+				window.instance.getModel().getLineContent(3),
+				window.instance.getModel().getLineContent(4),
+				window.instance.getModel().getLineContent(5),
+				window.instance.getModel().getLineContent(6),
+				window.instance.getModel().getLineContent(7),
 			]
 		`), [
 			'# from banana import *',
@@ -142,9 +142,9 @@ describe('API Integration Tests', function (): void {
 			await injectAxe(page);
 			await page.evaluate(`
 			(function () {
-				instance.focus();
-				instance.trigger('keyboard', 'cursorHome');
-				instance.trigger('keyboard', 'type', {
+				window.instance.focus();
+				window.instance.trigger('keyboard', 'cursorHome');
+				window.instance.trigger('keyboard', 'type', {
 					text: 'a'
 				});
 			})()
