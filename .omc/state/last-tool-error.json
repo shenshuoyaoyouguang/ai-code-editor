@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"git lfs push --all origin main\",\"timeout\":600000,\"description\":\"推送所有 LFS 对象到远程\"}",
+  "error": "Exit code 2\nUploading LFS objects:  41% (100/244), 569 KB | 0 B/s, done.\nGit LFS upload failed:\n  (missing) test/componentFixtures/.screenshots/baseline/chatQuestionCarousel/SingleSelectQuestion/Light.png (695e11e18a05b7f9d0b73612edc7f4b0288408bedbf7fc259fccb2c7fe5f7dd0)\nhint: Your push was rejected due to missing or corrupt local objects.\nhint: You can disable this check with: `git config lfs.allowincompletepush true`",
+  "timestamp": "2026-03-09T18:49:13.810Z",
+  "retry_count": 1
+}
