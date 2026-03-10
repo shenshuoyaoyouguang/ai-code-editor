@@ -64,7 +64,12 @@ patchFile(browserPagePath, [{
                 console.log(\`[component-explorer:response:\${response.status()}] \${response.url()}\`);
             }
         });
-        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        await page.goto(url, { waitUntil: 'commit' });
+        try {
+            await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+        } catch (err) {
+            console.log(\`[component-explorer:goto-warning] \${err?.message ?? err}\`);
+        }
         return new PlaywrightBrowserPage(page);`
 }]);
 
@@ -80,33 +85,40 @@ patchFile(componentExplorerPath, [{
 \t\t\t\tcheck();
 \t\t\t})
 \t\t\`);`,
-	replacement: `        await page.evaluateJs(\`
-\t\t\tnew Promise((resolve, reject) => {
-\t\t\t\tconst startedAt = Date.now();
-\t\t\t\tfunction check() {
-\t\t\t\t\tif (window.__componentExplorerCli__) {
-\t\t\t\t\t\tresolve();
-\t\t\t\t\t\treturn;
-\t\t\t\t\t}
-\t\t\t\t\tif (Date.now() - startedAt > 30000) {
-\t\t\t\t\t\tconst root = document.getElementById('root');
-\t\t\t\t\t\treject(new Error(
-\t\t\t\t\t\t\t'Timeout waiting for __componentExplorerCli__ to initialize ' +
-\t\t\t\t\t\t\tJSON.stringify({
-\t\t\t\t\t\t\t\turl: location.href,
-\t\t\t\t\t\t\t\treadyState: document.readyState,
-\t\t\t\t\t\t\t\ttitle: document.title,
-\t\t\t\t\t\t\t\trootChildCount: root?.childElementCount ?? -1,
-\t\t\t\t\t\t\t\tbodyText: document.body?.innerText?.slice(0, 500) ?? ''
-\t\t\t\t\t\t\t})
-\t\t\t\t\t\t));
-\t\t\t\t\t\treturn;
-\t\t\t\t\t}
-\t\t\t\t\tsetTimeout(check, 50);
-\t\t\t\t}
-\t\t\t\tcheck();
-\t\t\t})
-\t\t\`);`
+	replacement: `        const startedAt = Date.now();
+        while (true) {
+            try {
+                const state = await page.evaluateJs(\`
+\t\t\t\t(() => {
+\t\t\t\t\tconst root = document.getElementById('root');
+\t\t\t\t\treturn {
+\t\t\t\t\t\tready: !!window.__componentExplorerCli__,
+\t\t\t\t\t\turl: location.href,
+\t\t\t\t\t\treadyState: document.readyState,
+\t\t\t\t\t\ttitle: document.title,
+\t\t\t\t\t\trootChildCount: root?.childElementCount ?? -1,
+\t\t\t\t\t\tbodyText: document.body?.innerText?.slice(0, 500) ?? ''
+\t\t\t\t\t};
+\t\t\t\t})()
+\t\t\t\`);
+                if (state.ready) {
+                    break;
+                }
+                if (Date.now() - startedAt > 30000) {
+                    throw new Error('Timeout waiting for __componentExplorerCli__ to initialize ' + JSON.stringify(state));
+                }
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                const isReloadInProgress = message.includes('Execution context was destroyed') ||
+                    message.includes('Cannot find context with specified id') ||
+                    message.includes('Cannot find context') ||
+                    message.includes('Frame was detached');
+                if (!isReloadInProgress || Date.now() - startedAt > 30000) {
+                    throw error;
+                }
+            }
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }`
 }]);
 
 const viewerCandidates = [

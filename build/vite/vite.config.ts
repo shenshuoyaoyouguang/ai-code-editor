@@ -175,6 +175,16 @@ export default defineConfig({
 		}),
 	],
 	customLogger: logger,
+	optimizeDeps: isComponentExplorerScreenshot ? {
+		// Pre-bundle the screenshot-only explorer entry deps up front to avoid
+		// Vite discovering them on first page load and forcing a full reload.
+		// optimizeDeps matches exact specifiers, so subpath exports must be listed too.
+		include: [
+			'@vscode/component-explorer',
+			'@vscode/component-explorer/viewer',
+			'sinon',
+		],
+	} : undefined,
 	resolve: {
 		alias: {
 			'~@vscode/codicons': join(__dirname, '../../node_modules/@vscode/codicons'),
@@ -187,7 +197,7 @@ export default defineConfig({
 			}
 		}
 	},
-	root: '../..', // To support /out/... paths
+	root: path.resolve(__dirname, '../..'), // To support /out/... paths
 	build: {
 		outDir: join(__dirname, 'dist'),
 		rollupOptions: {
