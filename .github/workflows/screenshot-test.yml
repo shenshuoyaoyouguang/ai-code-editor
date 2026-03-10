@@ -44,7 +44,7 @@ jobs:
         working-directory: build
 
       - name: Install build/vite dependencies
-        run: rm -f package-lock.json && npm install
+        run: npm ci
         working-directory: build/vite
 
       - name: Patch component explorer CI behavior

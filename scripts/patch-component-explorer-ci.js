@@ -18,16 +18,8 @@ function replaceOrThrow(source, search, replacement, description) {
 	return { source: source.replace(search, replacement), changed: true, alreadyPatched: false };
 }
 
-function replaceRegexOrThrow(source, regex, replacement, description) {
-	if (source.includes(replacement)) {
-		return { source, changed: false, alreadyPatched: true };
-	}
-
-	if (!regex.test(source)) {
-		throw new Error(`Expected to find ${description} while patching component explorer CI support.`);
-	}
-
-	return { source: source.replace(regex, replacement), changed: true, alreadyPatched: false };
+function countRegexMatches(source, regex) {
+	return [...source.matchAll(new RegExp(regex.source, regex.flags))].length;
 }
 
 function patchFile(filePath, patches) {
@@ -122,38 +114,49 @@ const viewerCandidates = [
 	path.join(process.cwd(), 'node_modules', '@vscode', 'component-explorer', 'dist', 'viewer.js'),
 ];
 
+const unpatchedFixtureRegistryLoopRegex = /(^[ \t]*)for \(const \[(\w+), (\w+)\] of Object\.entries\(([^)\r\n]+)\)\) \{\r?\n([ \t]*)const (\w+) = \3\.default;\r?\n([ \t]*)\6 && typeof \6 == "object" && ([^;\r\n]+(?:\.register|\.set)\(\2, \6\));\r?\n\1\}/gm;
+const patchedFixtureRegistryLoopRegex = /(^[ \t]*)for \(const \[(\w+), (\w+)\] of Object\.entries\(([^)\r\n]+)\)\) \{\r?\n([ \t]*)if \(!\3\) \{\r?\n[ \t]*console\.error\("\[component-explorer\] Fixture module was undefined:", \2\);\r?\n[ \t]*continue;\r?\n\5\}\r?\n\5const (\w+) = \3\.default;\r?\n[ \t]*\6 && typeof \6 == "object" && ([^;\r\n]+(?:\.register|\.set)\(\2, \6\));\r?\n\1\}/gm;
+
+function patchViewerRegistryGuards(viewerPath) {
+	const source = fs.readFileSync(viewerPath, 'utf8');
+	const newline = source.includes('\r\n') ? '\r\n' : '\n';
+	const totalLoopCount = countRegexMatches(source, unpatchedFixtureRegistryLoopRegex) + countRegexMatches(source, patchedFixtureRegistryLoopRegex);
+
+	if (totalLoopCount === 0) {
+		throw new Error(`Expected to find fixture registry population guard while patching ${path.relative(process.cwd(), viewerPath)}.`);
+	}
+
+	const patchedSource = source.replace(unpatchedFixtureRegistryLoopRegex, (_, indent, keyName, moduleName, entriesExpr, bodyIndent, valueName, valueCheckIndent, registryTarget) => [
+		`${indent}for (const [${keyName}, ${moduleName}] of Object.entries(${entriesExpr})) {`,
+		`${bodyIndent}if (!${moduleName}) {`,
+		`${bodyIndent}  console.error("[component-explorer] Fixture module was undefined:", ${keyName});`,
+		`${bodyIndent}  continue;`,
+		`${bodyIndent}}`,
+		`${bodyIndent}const ${valueName} = ${moduleName}.default;`,
+		`${valueCheckIndent}${valueName} && typeof ${valueName} == "object" && ${registryTarget};`,
+		`${indent}}`
+	].join(newline));
+
+	const remainingUnpatchedLoopCount = countRegexMatches(patchedSource, unpatchedFixtureRegistryLoopRegex);
+	const patchedLoopCount = countRegexMatches(patchedSource, patchedFixtureRegistryLoopRegex);
+
+	if (remainingUnpatchedLoopCount > 0 || patchedLoopCount !== totalLoopCount) {
+		throw new Error(`Expected to patch every fixture registry population guard in ${path.relative(process.cwd(), viewerPath)}.`);
+	}
+
+	if (patchedSource === source) {
+		console.log(`Already patched ${path.relative(process.cwd(), viewerPath)}`);
+		return;
+	}
+
+	fs.writeFileSync(viewerPath, patchedSource);
+	console.log(`Patched ${path.relative(process.cwd(), viewerPath)}`);
+}
+
 for (const viewerPath of viewerCandidates) {
 	if (!fs.existsSync(viewerPath)) {
 		continue;
 	}
 
-	const source = fs.readFileSync(viewerPath, 'utf8');
-	const registryGuardReplacement = `for (const [t, n] of Object.entries(this._fixtureModules)) {
-      if (!n) {
-        console.error("[component-explorer] Fixture module was undefined:", t);
-        continue;
-      }
-      const s = n.default;
-      s && typeof s == "object" && __REGISTRY_TARGET__;
-    }`;
-	const regex = /for\s*\(const\s*\[t,\s*n\]\s*of\s*Object\.entries\(this\._fixtureModules\)\)\s*\{\s*const\s+s\s*=\s*n\.default;\s*s\s*&&\s*typeof\s+s\s*==\s*"object"\s*&&\s*([^;]+);\s*\}/m;
-	const match = source.match(regex);
-
-	if (!match) {
-		if (source.includes('Fixture module was undefined:')) {
-			console.log(`Already patched ${path.relative(process.cwd(), viewerPath)}`);
-			continue;
-		}
-		throw new Error(`Expected to find fixture registry population guard while patching ${path.relative(process.cwd(), viewerPath)}.`);
-	}
-
-	const registryTarget = match[1].trim();
-	const replacement = registryGuardReplacement.replace('__REGISTRY_TARGET__', registryTarget);
-	const result = replaceRegexOrThrow(source, regex, replacement, 'fixture registry population guard');
-	if (result.changed) {
-		fs.writeFileSync(viewerPath, result.source);
-		console.log(`Patched ${path.relative(process.cwd(), viewerPath)}`);
-	} else {
-		console.log(`Already patched ${path.relative(process.cwd(), viewerPath)}`);
-	}
+	patchViewerRegistryGuards(viewerPath);
 }
